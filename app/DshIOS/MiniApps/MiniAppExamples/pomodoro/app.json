@@ -1,0 +1,20 @@
+{
+  "name": {
+    "zh-Hans": "番茄钟",
+    "zh-Hant": "番茄鐘",
+    "en": "Pomodoro",
+    "ja": "ポモドーロ",
+    "ko": "뽀모도로",
+    "es": "Pomodoro"
+  },
+  "icon": "🍅",
+  "color": "#F2542D",
+  "description": {
+    "zh-Hans": "专注 25 分钟，休息 5 分钟，记下今天完成了几个",
+    "zh-Hant": "專注 25 分鐘，休息 5 分鐘，記下今天完成了幾個",
+    "en": "Focus for 25 minutes, rest for 5, and count today's sessions",
+    "ja": "25 分集中して 5 分休憩。今日いくつ終えたか記録します",
+    "ko": "25분 집중, 5분 휴식. 오늘 몇 번 했는지 기록해요",
+    "es": "Concéntrate 25 minutos, descansa 5 y cuenta las sesiones de hoy"
+  }
+}

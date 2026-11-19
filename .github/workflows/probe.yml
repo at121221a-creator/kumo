@@ -1,0 +1,17 @@
+name: Probe
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          echo "== sw_vers =="; sw_vers
+          echo "== xcode apps =="; ls /Applications | grep -i xcode || true
+          echo "== default =="; xcodebuild -version
+          echo "== node =="; node --version || true
+          echo "== cmake =="; cmake --version | head -1 || true
+          echo "== uv =="; uv --version || true
