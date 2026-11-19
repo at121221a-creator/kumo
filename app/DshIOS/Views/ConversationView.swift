@@ -66,6 +66,7 @@ struct ConversationView: View {
         Group {
             if let model {
                 content(model)
+                    .overlay(alignment: .topTrailing) { UsageWindow(model: model) }
             } else {
                 ConversationLoading().background(Palette.background)
             }
