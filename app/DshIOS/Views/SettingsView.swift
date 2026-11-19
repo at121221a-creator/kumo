@@ -167,10 +167,9 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle(isOn: Binding(get: { !UserDefaults.standard.bool(forKey: "xidai.ball.hidden") }, set: { UserDefaults.standard.set(!$0, forKey: "xidai.ball.hidden") })) {
-                        Label("显示用量", systemImage: "circle.dotted")
+                    NavigationLink { BalancePage() } label: {
+                        row("余额", "creditcard", "")
                     }
-                    .toggleStyle(.mono)
                 } header: {
                     Text("用量")
                 } footer: {
