@@ -1,0 +1,145 @@
+import SwiftUI
+
+/// A turn that had no working credential. The engine's error names environment variables;
+/// this says what to do instead, and once it is done offers to send the message again.
+struct CredentialNotice: View {
+    let id: String
+    let problem: TurnFailure.CredentialProblem
+    let model: SessionModel
+    @Environment(AppModel.self) private var app
+    /// Some provider can answer now; nil until asked.
+    @State private var ready: Bool?
+
+    /// A later turn has moved on: this one is only a record, and only the last can be sent again.
+    private var isLast: Bool { model.items.last?.id == id && !model.running }
+
+    private var resendText: String? {
+        guard isLast else { return nil }
+        for item in model.items.reversed() {
+            if case .user(_, let text, _, _) = item, !text.isEmpty { return text }
+        }
+        return nil
+    }
+
+    /// What a credential is added for: the conversation's model, unless that is the official route's.
+    private var keyStep: AppModel.CredentialStep {
+        switch model.modelCatalog?.selection(model)?.provider {
+        case nil, "deepseek-official", "deepseek-account": .officialKey
+        default: .settings
+        }
+    }
+
+    /// The conversation runs on Fish Pocket credits: its credential is a Fish Pocket sign-in, not a key.
+    private var onFishPocket: Bool { model.modelCatalog?.selection(model)?.provider == FishPocketAPI.provider }
+
+    var body: some View {
+        // Not a Group: an empty one takes its modifiers with it, and the task below would never run.
+        VStack(alignment: .leading, spacing: 0) {
+            if !isLast {
+                record
+            } else if onFishPocket {
+                switch (problem, app.fishPocket.signedIn) {
+                case (.missing, true):
+                    card("已经配置好了", "把刚才的消息重新发送一次。") { resendButton }
+                case (.missing, false):
+                    card("需要登录 Fish Pocket", "登录 Fish Pocket 账号后，就能用账号里的额度对话。") {
+                        Button("登录") { app.requestCredentials(.fishPocket) }
+                            .buttonStyle(.capsule(.primary, height: 44))
+                    }
+                case (.invalid, true):
+                    card("Fish Pocket 连接已失效", "重新连接后再发送一次。") {
+                        Button("重新连接") { Task { await app.fishPocket.repairRuntimeKey() } }
+                            .buttonStyle(.capsule(.outline, height: 44))
+                        resendButton
+                    }
+                case (.invalid, false):
+                    card("Fish Pocket 登录已失效", "重新登录后再发送一次。") {
+                        Button("重新登录") { app.requestCredentials(.fishPocket) }
+                            .buttonStyle(.capsule(.outline, height: 44))
+                        resendButton
+                    }
+                }
+            } else {
+                switch (problem, ready) {
+                case (.missing, nil):
+                    EmptyView()
+                case (.missing, false?):
+                    card("需要先登录或添加 API Key", app.fishPocket.available
+                        ? "登录 DeepSeek 或 Fish Pocket 账号，或者添加 API Key，就能开始对话。"
+                        : "登录 DeepSeek 账号，或添加一个 API Key，就能开始对话。") {
+                        Button("添加 API Key") { app.requestCredentials(keyStep) }
+                            .buttonStyle(.capsule(.outline, height: 44))
+                        Button("登录 DeepSeek") { app.requestCredentials(.signIn) }
+                            .buttonStyle(.capsule(.outline, height: 44))
+                    } below: {
+                        if app.fishPocket.available { fishPocketButton }
+                    }
+                case (.missing, true?):
+                    card("已经配置好了", "把刚才的消息重新发送一次。") { resendButton }
+                case (.invalid, _):
+                    card("API Key 无法使用", "这个 API Key 无效或已失效，换一个再试。") {
+                        Button("更换 API Key") { app.requestCredentials(keyStep) }
+                            .buttonStyle(.capsule(.outline, height: 44))
+                        resendButton
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Signing in or saving a key anywhere answers here, without a new turn.
+        .task(id: "\(app.revision("llm/adapters-updated", "settings/document-updated", "credentials/record-updated", "credentials/reference-updated"))-\(app.account.signedIn)-\(app.fishPocket.signedIn)") {
+            guard problem == .missing else { return }
+            ready = await app.onboardingReadiness() == .ready
+        }
+    }
+
+    private var record: some View {
+        Text(problem == .missing ? "这条消息发送时还没有配置模型。" : "这条消息发送时 API Key 无法使用。")
+            .font(.footnote)
+            .foregroundStyle(Palette.secondary)
+    }
+
+    @ViewBuilder
+    private var resendButton: some View {
+        if let resendText {
+            Button("重新发送") {
+                Haptics.tap()
+                Task { await model.send(text: resendText) }
+            }
+            .buttonStyle(.capsule(.primary, height: 44))
+        }
+    }
+
+    /// The third way in beside the DeepSeek account and a key, when this build has the service.
+    private var fishPocketButton: some View {
+        Button("登录 Fish Pocket") { app.requestCredentials(.fishPocket) }
+            .buttonStyle(.capsule(.outline, height: 44))
+    }
+
+    private func card<Actions: View>(_ title: LocalizedStringKey, _ detail: LocalizedStringKey, @ViewBuilder actions: () -> Actions) -> some View {
+        card(title, detail, actions: actions) { EmptyView() }
+    }
+
+    /// `below` is a row of its own under the actions.
+    private func card<Actions: View, Below: View>(
+        _ title: LocalizedStringKey, _ detail: LocalizedStringKey,
+        @ViewBuilder actions: () -> Actions, @ViewBuilder below: () -> Below
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                Text(detail).font(.footnote).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            // A longer translation shrinks to stay on the one line of its capsule.
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) { actions() }
+                below()
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.grouped, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}

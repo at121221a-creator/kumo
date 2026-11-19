@@ -1,0 +1,6 @@
+{
+  "images" : [
+    { "filename" : "WordPoster.png", "idiom" : "universal" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

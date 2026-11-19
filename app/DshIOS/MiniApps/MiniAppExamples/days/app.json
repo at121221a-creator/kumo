@@ -1,0 +1,20 @@
+{
+  "name": {
+    "zh-Hans": "倒数日",
+    "zh-Hant": "倒數日",
+    "en": "Days",
+    "ja": "カウントダウン",
+    "ko": "디데이",
+    "es": "Días"
+  },
+  "icon": "⏳",
+  "color": "#2F5BEA",
+  "description": {
+    "zh-Hans": "离重要的日子还有几天，或者已经过去几天",
+    "zh-Hant": "離重要的日子還有幾天，或已經過了幾天",
+    "en": "Days until the dates that matter, or since",
+    "ja": "大切な日まであと何日、または何日経ったか",
+    "ko": "중요한 날까지 남은 날, 또는 지난 날",
+    "es": "Cuántos días faltan para tus fechas, o cuántos han pasado"
+  }
+}
