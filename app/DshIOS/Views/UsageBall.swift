@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 会话里一颗可拖动的小球：显示这一场用了多少 token、大约花了多少钱。
-/// 点一下展开明细，长按隐藏；位置拖过之后就记住。
+/// 会话右下角一枚可拖动的用量胶囊：本场 token 与大致花费。
+/// 点开看明细，长按隐藏，位置拖过就记住。
 struct UsageBall: View {
     let model: SessionModel
 
@@ -9,23 +9,8 @@ struct UsageBall: View {
     @AppStorage("xidai.ball.x") private var savedX: Double = 0
     @AppStorage("xidai.ball.y") private var savedY: Double = 0
 
-    @State private var drag: CGSize = .zero
+    @GestureState private var dragOffset: CGSize = .zero
     @State private var expanded = false
-
-    private let diameter: CGFloat = 56
-    private let inset: CGFloat = 34
-
-    private var input: Int { model.tokens.input }
-    private var output: Int { model.tokens.output }
-    private var cache: Int { model.tokens.cacheRead }
-    private var total: Int { input + output }
-
-    private var cost: Double {
-        let fresh = max(0, input - cache)
-        return Double(fresh) / 1_000_000 * 3
-            + Double(cache) / 1_000_000 * 0.025
-            + Double(output) / 1_000_000 * 6
-    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -35,20 +20,20 @@ struct UsageBall: View {
                         panel
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                             .padding(.trailing, 12)
-                            .padding(.top, 210)
+                            .padding(.top, 206)
                     }
-                    bubble
-                        .position(x: clamp(x(proxy), lo: inset, hi: proxy.size.width - inset),
-                                  y: clamp(y(proxy), lo: 96, hi: proxy.size.height - 40))
+                    capsule
+                        .position(x: clamped(point(proxy).x + dragOffset.width, lo: 46, hi: proxy.size.width - 46),
+                                  y: clamped(point(proxy).y + dragOffset.height, lo: 92, hi: proxy.size.height - 34))
                         .gesture(
-                            DragGesture(minimumDistance: 3)
-                                .onChanged { value in drag = value.translation }
+                            DragGesture(minimumDistance: 2)
+                                .updating($dragOffset) { value, state, _ in
+                                    state = value.translation
+                                }
                                 .onEnded { value in
-                                    savedX = Double(clamp(x(proxy) + value.translation.width,
-                                                          lo: inset, hi: proxy.size.width - inset))
-                                    savedY = Double(clamp(y(proxy) + value.translation.height,
-                                                          lo: 96, hi: proxy.size.height - 40))
-                                    drag = .zero
+                                    let p = point(proxy)
+                                    savedX = Double(clamped(p.x + value.translation.width, lo: 46, hi: proxy.size.width - 46))
+                                    savedY = Double(clamped(p.y + value.translation.height, lo: 92, hi: proxy.size.height - 34))
                                 }
                         )
                         .onTapGesture { withAnimation(.snappy(duration: 0.18)) { expanded.toggle() } }
@@ -60,36 +45,21 @@ struct UsageBall: View {
         }
     }
 
-    private func x(_ proxy: GeometryProxy) -> CGFloat {
-        let base = savedX <= 0 ? proxy.size.width - inset : CGFloat(savedX)
-        return base + drag.width
+    private func point(_ proxy: GeometryProxy) -> CGPoint {
+        let x = savedX <= 0 ? proxy.size.width - 52 : CGFloat(savedX)
+        let y = savedY <= 0 ? proxy.size.height - 120 : CGFloat(savedY)
+        return CGPoint(x: x, y: y)
     }
 
-    private func y(_ proxy: GeometryProxy) -> CGFloat {
-        let base = savedY <= 0 ? 150 : CGFloat(savedY)
-        return base + drag.height
-    }
-
-    private func clamp(_ value: CGFloat, lo: CGFloat, hi: CGFloat) -> CGFloat {
+    private func clamped(_ value: CGFloat, lo: CGFloat, hi: CGFloat) -> CGFloat {
         min(max(value, lo), max(lo, hi))
     }
 
-    private var bubble: some View {
-        ZStack {
-            Circle().fill(.ultraThinMaterial)
-            Circle().strokeBorder(Palette.stroke, lineWidth: 1)
-            VStack(spacing: 0) {
-                Text(short(total))
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                Text("token")
-                    .font(.system(size: 7.5))
-            }
-            .foregroundStyle(Palette.secondary)
-        }
-        .frame(width: diameter, height: diameter)
-        .shadow(color: .black.opacity(0.14), radius: 10, y: 3)
-        .contentShape(Circle())
-        .accessibilityLabel("用量 \(short(total)) token")
+    /// 胶囊本体：纯色底 + 细描边，拖动时不重算材质，所以顺。
+    private var capsule: some View {
+        UsageCapsule(model: model)
+            .contentShape(Capsule())
+            .accessibilityLabel("本场用量")
     }
 
     private var panel: some View {
@@ -108,24 +78,29 @@ struct UsageBall: View {
                 }
                 .buttonStyle(.plain)
             }
-            line("输入", short(input))
-            line("其中缓存", short(cache))
-            line("输出", short(output))
+            line("输入", UsageFormat.tokens(model.tokens.input))
+            line("其中缓存", UsageFormat.tokens(model.tokens.cacheRead))
+            line("输出", UsageFormat.tokens(model.tokens.output))
             if let context = model.contextTokens {
-                line("上下文", short(context))
+                line("上下文", UsageFormat.tokens(context))
             }
             Rectangle().fill(Palette.stroke).frame(height: 1).padding(.vertical, 2)
             HStack(spacing: 4) {
                 Text("约").foregroundStyle(Palette.secondary)
-                Text(money(cost)).foregroundStyle(Palette.ink)
+                Text(UsageFormat.money(UsageFormat.cost(model.tokens))).foregroundStyle(Palette.ink)
             }
             .font(.system(size: 11, weight: .semibold))
         }
         .padding(11)
         .frame(width: 152, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(.regularMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(Palette.stroke, lineWidth: 1))
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .background(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(Palette.background.opacity(0.94))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .strokeBorder(Palette.stroke, lineWidth: 1)
+                )
+        )
     }
 
     private func line(_ title: String, _ value: String) -> some View {
@@ -136,15 +111,51 @@ struct UsageBall: View {
         }
         .font(.system(size: 10.5))
     }
+}
 
-    private func short(_ value: Int) -> String {
+/// 只有这一小块读 token：数字变化时只重画它，胶囊的形状和位置不动。
+private struct UsageCapsule: View {
+    let model: SessionModel
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(UsageFormat.tokens(model.tokens.input + model.tokens.output))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(Palette.ink)
+            Rectangle()
+                .fill(Palette.stroke)
+                .frame(width: 1, height: 10)
+            Text(UsageFormat.money(UsageFormat.cost(model.tokens)))
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(Palette.secondary)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(Palette.background.opacity(0.94))
+                .overlay(Capsule().strokeBorder(Palette.stroke, lineWidth: 1))
+                .shadow(color: .black.opacity(0.10), radius: 8, y: 2)
+        )
+    }
+}
+
+enum UsageFormat {
+    static func tokens(_ value: Int) -> String {
         if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
         if value >= 1000 { return String(format: "%.1fk", Double(value) / 1000) }
         return "\(value)"
     }
 
-    private func money(_ value: Double) -> String {
-        if value < 0.01 { return "不到 ¥0.01" }
+    static func cost(_ tokens: (input: Int, output: Int, cacheRead: Int)) -> Double {
+        let fresh = max(0, tokens.input - tokens.cacheRead)
+        return Double(fresh) / 1_000_000 * 3
+            + Double(tokens.cacheRead) / 1_000_000 * 0.025
+            + Double(tokens.output) / 1_000_000 * 6
+    }
+
+    static func money(_ value: Double) -> String {
+        if value < 0.01 { return "¥0" }
         return String(format: "¥%.2f", value)
     }
 }
