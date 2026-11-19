@@ -69,6 +69,9 @@ struct SettingsView: View {
                         row("DeepSeek 账号", "person.crop.circle", app.account.signedIn ? (app.account.displayName ?? String(localized: "已登录")) : String(localized: "未登录"))
                     }
                     DeepSeekKeyRow()
+                    NavigationLink { AccountPage() } label: {
+                        row("余额", "creditcard", balanceSummary)
+                    }
                 } header: {
                     Text("连接方式")
                 } footer: {
@@ -166,15 +169,6 @@ struct SettingsView: View {
                     }
                 }
 
-                Section {
-                    NavigationLink { BalancePage() } label: {
-                        row("余额", "creditcard", "")
-                    }
-                } header: {
-                    Text("用量")
-                } footer: {
-                    Text("对话里那颗球显示本场消耗的 token 和大致花费。点开看明细，长按隐藏。")
-                }
 
                 Section {
                     NavigationLink { AdvancedSettingsPage() } label: { row("高级", "wrench.and.screwdriver") }
@@ -222,6 +216,14 @@ struct SettingsView: View {
         // 设置 and every page pushed or presented from it: the system's lists, not the monochrome ones.
         .environment(\.systemLists, true)
         .tint(Palette.ink)
+    }
+
+    /// 设置里直接给出当前钱包余额。
+    private var balanceSummary: String {
+        guard let wallets = app.account.wallets, !wallets.isEmpty else { return "" }
+        return wallets
+            .map { "\($0["balance"].string ?? "0") \($0["currency"].string?.uppercased() ?? "")" }
+            .joined(separator: " + ")
     }
 
     private var aboutValue: String {
