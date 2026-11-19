@@ -71,6 +71,10 @@ struct SettingsView: View {
                     DeepSeekKeyRow()
                     NavigationLink { AccountPage() } label: {
                         row("余额", "creditcard", balanceSummary)
+                    Toggle(isOn: Binding(get: { !UserDefaults.standard.bool(forKey: "xidai.usage.hidden") }, set: { UserDefaults.standard.set(!$0, forKey: "xidai.usage.hidden") })) {
+                        Label("显示用量窗口", systemImage: "chart.bar.xaxis")
+                    }
+                    .toggleStyle(.mono)
                     }
                 } header: {
                     Text("连接方式")
