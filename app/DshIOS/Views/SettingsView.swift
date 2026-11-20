@@ -71,11 +71,11 @@ struct SettingsView: View {
                     DeepSeekKeyRow()
                     NavigationLink { AccountPage() } label: {
                         row("余额", "creditcard", balanceSummary)
+                    }
                     Toggle(isOn: Binding(get: { !UserDefaults.standard.bool(forKey: "xidai.usage.hidden") }, set: { UserDefaults.standard.set(!$0, forKey: "xidai.usage.hidden") })) {
                         Label("显示用量窗口", systemImage: "chart.bar.xaxis")
                     }
                     .toggleStyle(.mono)
-                    }
                 } header: {
                     Text("连接方式")
                 } footer: {
@@ -226,7 +226,11 @@ struct SettingsView: View {
     private var balanceSummary: String {
         guard let wallets = app.account.wallets, !wallets.isEmpty else { return "" }
         return wallets
-            .map { "\($0["balance"].string ?? "0") \($0["currency"].string?.uppercased() ?? "")" }
+            .map { wallet -> String in
+                let raw = wallet["balance"].string ?? "0"
+                let amount = Double(raw).map { String(format: "%.2f", $0) } ?? raw
+                return amount + " " + (wallet["currency"].string?.uppercased() ?? "")
+            }
             .joined(separator: " + ")
     }
 
