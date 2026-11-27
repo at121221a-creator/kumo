@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 对话页里的一张用量窗口：本场 token、上下文和大概花销。
+/// 对话页里的一张用量窗口：每秒刷新一次，回复进行中显示计时。
 /// 整张卡片按住就能拖到屏幕任何位置，位置记住；✕ 收掉，设置里能再打开。
 struct UsageWindow: View {
     let model: SessionModel
@@ -10,29 +10,35 @@ struct UsageWindow: View {
     @AppStorage("xidai.usage.y") private var savedY: Double = 0
 
     @GestureState private var drag: CGSize = .zero
+    @State private var startedAt: Date?
 
     private let width: CGFloat = 152
 
     var body: some View {
         GeometryReader { proxy in
             if !hidden {
-                card
-                    .position(
-                        x: clamp(origin(proxy).x + drag.width, lo: width / 2 + 8, hi: proxy.size.width - width / 2 - 8),
-                        y: clamp(origin(proxy).y + drag.height, lo: 90, hi: proxy.size.height - 80)
-                    )
-                    .gesture(
-                        DragGesture(minimumDistance: 2)
-                            .updating($drag) { value, state, _ in state = value.translation }
-                            .onEnded { value in
-                                let start = origin(proxy)
-                                savedX = Double(clamp(start.x + value.translation.width,
-                                                      lo: width / 2 + 8, hi: proxy.size.width - width / 2 - 8))
-                                savedY = Double(clamp(start.y + value.translation.height,
-                                                      lo: 90, hi: proxy.size.height - 80))
-                            }
-                    )
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    card(now: context.date)
+                        .position(
+                            x: clamp(origin(proxy).x + drag.width, lo: width / 2 + 8, hi: proxy.size.width - width / 2 - 8),
+                            y: clamp(origin(proxy).y + drag.height, lo: 90, hi: proxy.size.height - 80)
+                        )
+                        .gesture(
+                            DragGesture(minimumDistance: 2)
+                                .updating($drag) { value, state, _ in state = value.translation }
+                                .onEnded { value in
+                                    let start = origin(proxy)
+                                    savedX = Double(clamp(start.x + value.translation.width,
+                                                          lo: width / 2 + 8, hi: proxy.size.width - width / 2 - 8))
+                                    savedY = Double(clamp(start.y + value.translation.height,
+                                                          lo: 90, hi: proxy.size.height - 80))
+                                }
+                        )
+                }
             }
+        }
+        .onChange(of: model.running) { _, running in
+            startedAt = running ? Date() : nil
         }
     }
 
@@ -46,7 +52,7 @@ struct UsageWindow: View {
         min(max(value, lo), max(lo, hi))
     }
 
-    private var card: some View {
+    private func card(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
                 Text("本场用量")
@@ -81,6 +87,20 @@ struct UsageWindow: View {
                     .foregroundStyle(Palette.ink)
             }
             .font(.system(size: 11, weight: .semibold))
+
+            HStack(spacing: 3) {
+                if model.running, let startedAt {
+                    Circle()
+                        .fill(Palette.running)
+                        .frame(width: 4, height: 4)
+                    Text("运行中 " + UsageTally.clock(now.timeIntervalSince(startedAt)))
+                } else {
+                    Text("更新 " + UsageTally.stamp(now))
+                }
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 9))
+            .foregroundStyle(Palette.faint)
         }
         .padding(11)
         .frame(width: width, alignment: .leading)
@@ -123,5 +143,16 @@ enum UsageTally {
     static func money(_ value: Double) -> String {
         if value < 0.01 { return "¥0" }
         return String(format: "¥%.2f", value)
+    }
+
+    static func clock(_ seconds: TimeInterval) -> String {
+        let total = Int(max(0, seconds))
+        return String(format: "%02d:%02d", total / 60, total % 60)
+    }
+
+    static func stamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: date)
     }
 }
